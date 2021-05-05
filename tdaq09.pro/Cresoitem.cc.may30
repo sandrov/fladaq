@@ -1,0 +1,110 @@
+#include <iostream.h>
+#include "Cresoitem.h"
+
+#define kMaxttl 100
+
+//static resoitem *resoitem::startoflist=0;
+
+resoitem::resoitem(resoitem **startoflist)
+{
+   resoitem * temp= *startoflist;
+
+   if (!temp) 
+    { 
+        
+        *startoflist = this;
+        prev =0;
+        next = 0;
+    }
+   else
+    {
+       temp->prev = this;
+       prev = 0;
+       next  =  temp;
+       *startoflist = this;
+    }
+}
+
+resoitem::~resoitem()
+{ 
+  if (prev)
+    prev->next = next;
+}
+   
+resolist::resolist()
+{
+   thelist=NULL;
+}
+
+resolist::~resolist()
+{
+   resoitem * temp= thelist;
+   resoitem * next;
+   while (temp)
+   {
+     next = temp->next;
+     delete temp;
+     temp = next;
+   }
+}
+
+void
+resolist::Addresoitem(in_addr newAddr,long newId,long newclass,char *newstatus)
+{
+   resoitem * temp= thelist;
+
+   while (temp)
+   {
+    if (temp->resId == newId) break;
+    temp=temp->next;
+   }
+   
+   if (!temp) 
+    { 
+       temp = new resoitem(&thelist);
+        
+     //cout << "Created new resource" << endl;
+    }
+  else 
+     //cout << "Found resource" << temp->resId <<  endl;
+  bcopy (&newAddr,&(temp->resoAddr),sizeof(newAddr)); 
+  temp->resclass = newclass;
+  bcopy (newstatus,temp->status,80); 
+  temp->ttl = kMaxttl;
+  temp->resId=newId;
+}
+
+
+int
+resolist::printlist()
+{
+   resoitem *temp=thelist;
+ 
+  ttlupdate();
+  while(temp)
+  {
+   if (temp->ttl<=0) cout << "Expired! ";
+ 
+   cout << "class " << temp->resclass 
+        << " Addr: " << inet_ntoa(temp->resoAddr)
+        << " status: " << temp->status
+        << " ttl: " << temp->ttl 
+        << endl;
+
+   temp=temp->next;
+  }
+  cout << endl;
+}
+
+int
+resolist::ttlupdate()
+{
+  resoitem *temp=thelist;
+
+  while(temp)
+  {
+   if (temp->ttl!=0) temp->ttl--;
+   temp=temp->next;
+  }
+   
+}

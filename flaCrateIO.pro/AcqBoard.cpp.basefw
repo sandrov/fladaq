@@ -1,0 +1,197 @@
+#include "AcqBoard.h"
+
+AcqBoard::AcqBoard(int nbr, ViSession id) : boardNbr(nbr), boardId(id) {}
+
+AcqBoard::~AcqBoard(){}
+
+#ifndef _simulate_
+
+// Configures the board.
+// Input (param): BoardConf conf - structure with the configuration parameters.
+void
+AcqBoard::configure (BoardConf conf)
+{		
+    // Configure timebase
+	AcqrsD1_configHorizontal(boardId, conf.sampInterval, conf.delayTime);
+	AcqrsD1_configMemory(boardId, nSamples, conf.nbrSegments);
+
+	// Configure vertical settings of channels
+	AcqrsD1_configVertical(boardId, 1, conf.fullScale, conf.offset, conf.coupling, conf.bandwidth);
+	AcqrsD1_configVertical(boardId, 2, conf.fullScale, conf.offset, conf.coupling, conf.bandwidth);
+	
+	printf("AcqBoard::configure(): board %d configured.\n", boardNbr);
+}
+
+// Configures the trigger parameters.
+// Input (param): TrigConf conf - structure with the trigger parameters.
+void
+AcqBoard::configureTrig (TrigConf conf)
+{
+	AcqrsD1_configTrigClass(boardId, conf.trigClass, conf.sourcePattern, 0, 0, 0.0, 0.0);
+	AcqrsD1_configTrigSource(boardId, conf.channel, conf.trigCoupling, conf.trigSlope, conf.trigLevel1, conf.trigLevel2);
+}
+// Starts the DPU on the board.
+void
+AcqBoard::startDPU ()
+{
+    AcqUtil::checkStatus(AcqrsD1_acquire(boardId));
+    printf("AcqBoard::startDPU(): core of board (%d,%ld) started.\n", boardNbr, (long)boardId);
+}
+
+// Tells if data are ready
+// Output (return): true if there are ready data, false otherwise.
+int
+AcqBoard::isDataRdy()
+{
+	ViBoolean done = 0;
+	long timeoutCounter = 100000; // Timeout waiting for a trigger
+	long errTimeoutCounter = 500000; // Timeout for acquisition completion
+
+	while (!done && errTimeoutCounter--)
+	{
+		AcqrsD1_acqDone(boardId, &done); // Poll for the end of the acquisition
+		if (!timeoutCounter--) // Trigger timeout occured
+			printf("AcqBoard::isDataRdy(): Slow trigger...\n");
+		//AcqrsD1_forceTrig(boardId); // Force a 'manual' (or 'software') trigger
+	}
+	return done;
+}
+
+// Writes the data gathered by the board starting from the passed address.
+// Output (param): char* buf - pointer to the memory area to write to.
+int
+AcqBoard::getData(char* buf)
+{
+
+	long nbrSegments = 1;
+	long extra;
+	int ii;
+	
+	ViStatus status;
+
+	AqReadParameters		readParams;
+	AqDataDescriptor		wfDesc;
+	AqSegmentDescriptor		segDesc[nbrSegments];
+
+	Acqrs_getInstrumentInfo(boardId, "TbSegmentPad", &extra);
+
+	readParams.dataType			= 0;
+	readParams.readMode			= 0;
+	readParams.nbrSegments			= 1;
+	readParams.firstSampleInSeg		= 0;
+	readParams.firstSegment			= 0;
+	readParams.segmentOffset		= 0;
+	readParams.segDescArraySize		= (long)sizeof(AqSegmentDescriptor) * nbrSegments;
+	readParams.nbrSamplesInSeg		= nSamples;
+	readParams.dataArraySize		= (readParams.nbrSamplesInSeg + extra); // This is the formula implemented inside the driver.
+	readParams.reserved			= 0;
+	readParams.reserved2			= 0.0;
+	readParams.reserved3			= 0.0;
+
+
+	// local buffer
+	char* wf = new char[dataArraySize*2];
+
+	// Read the channel 1 waveform samples
+	status = AcqrsD1_readData(boardId, 1, &readParams, (void *)wf, &wfDesc, &segDesc);
+	AcqUtil::checkStatus(status);
+	printf("AcqBoard::getData(): samples acquired on channel 1: %d \n", (int)wfDesc.returnedSamplesPerSeg);
+	int iFirst = (int)wfDesc.indexFirstPoint;
+	for (int i = 0; i < nSamples; i++)
+          buf[i] = wf[i+iFirst];
+
+
+
+	// Read the channel 2 waveform samples
+	status = AcqrsD1_readData(boardId, 2, &readParams, (void *)(wf+dataArraySize), &wfDesc, &segDesc);
+	AcqUtil::checkStatus(status);
+	printf("AcqBoard::getData(): samples acquired on channel 2: %d \n", (int)wfDesc.returnedSamplesPerSeg);
+	iFirst = (int)wfDesc.indexFirstPoint;
+	for (int i = 0; i < nSamples; i++)
+	  buf[i+nSamples] = wf[i+dataArraySize+iFirst];
+	
+	
+	delete [] wf;
+
+
+	// Print the waveforms
+	//printf ("AcqBoard::getData(): waveform 1:");
+	//for (ii=0;ii<nSamples;ii+=1000)
+	//printf	(" %hx ", buf[ii]);
+	//printf ("\nAcqBoard::getData(): waveform 2:");
+	//for (ii=0;ii<nSamples;ii+=1000)
+	//printf	(" %hx ", buf[ii+nSamples]);
+	//*timesta1 = segDesc[0].timeStampLo;
+	//*timesta2 = segDesc[0].timeStampHi;
+	
+	static bool isfirst = true;
+	if(isfirst){
+	  FILE* f;
+	  f=fopen("wavef.txt","w");
+	  fprintf(f,"t/I:wf1/I:wf2/I\n");
+	  for (ii = 0; ii<nSamples; ii++){
+	    int swf1 = buf[ii];
+	    int swf2 = buf[ii+nSamples];
+	    //fprintf(f,"%d %hx %hx\n", ii, buf[ii] & 0x000000ff, buf[ii+nSamples] & 0x000000ff);
+	    fprintf(f,"%d %d %d\n",ii,swf1,swf2);
+	  }
+	  fclose(f);
+	  isfirst = false;
+	}
+
+
+	return readParams.dataArraySize;
+
+}
+
+#endif
+
+// Writes to a register on the FPGA.
+// Input (param): long reg - register number
+// Input (param): long n - number of values to write
+// Input (param): long* buffer - pointer to the memory to read from.
+// Output (return): long - outcome of the operation. See the Acqiris manual for information.
+long
+AcqBoard::write(long reg, long n, long* buffer)
+{
+    return Acqrs_logicDeviceIO(boardId, "Block1Dev1", reg, n, buffer, 1, 0);
+}
+
+// Reads from a register on the FPGA.
+// Input (param): long reg - register number
+// Input (param): long n - number of values to read
+// Output (param): long* buffer - pointer to the memory area to write to.
+// Output (return): long - outcome of the operation. See the Acqiris manual for information.
+long
+AcqBoard::read(long reg, long n, long* buffer)
+{
+    return Acqrs_logicDeviceIO(boardId, "Block1Dev1", reg, n, buffer, 0, 0);
+}
+
+// For testing purposes. If _simulate_ is defined, it should work without the hardware.
+#ifdef _simulate_
+void AcqBoard::configure (BoardConf conf) {}
+
+void AcqBoard::startDPU () {}
+
+bool 
+AcqBoard::isDataRdy()
+{
+#ifdef _dbg_
+    printf("AcqBoard::isDataRdy(): wait a second...\n");
+    sleep(1);
+#endif
+    return true;
+}
+
+void
+AcqBoard::getData(char* buf)
+{
+#ifdef _dbg_
+    printf("AcqBoard::getData(): filling with %d (%c) for %d bytes\n", id, (char)(id+'0'), nSamples);
+#endif
+    for (int i = 0; i < nSamples; i++)
+        buf[i] = (char)(boardNbr+'0');
+}
+
+#endif

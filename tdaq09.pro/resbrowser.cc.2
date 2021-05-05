@@ -1,0 +1,129 @@
+#include <iostream.h>
+#include <pthread.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+
+#include "Cudpux.h"
+#include "Ctcpux.h"
+#include "Cresoitem.h"
+void *brows(void *);
+
+
+
+main()
+{
+
+   resolist mres;
+   pthread_t mth;
+
+   pthread_create(&mth,NULL,brows,(void *)&mres);
+
+   Ctcp htp(8888);
+
+   while (1)
+   {
+      Ctcp *mcli = htp.Accept();
+  
+      char mbuf[1024];
+
+      char lastr;
+      do 
+       { 
+        lastr = mbuf[0];
+        mcli->Receive(mbuf,1);
+        printf("%c",mbuf[0]);
+      } while ((mbuf[0]!='\r')||(lastr!='\n'));
+      mcli->Receive(mbuf,1);
+
+      strcpy (mbuf,"HTTP/1.0 200 OK\n");
+      mcli->Send(mbuf,strlen(mbuf));
+
+      strcpy (mbuf,"MIME-Version 1.0\n");
+      mcli->Send(mbuf,strlen(mbuf));
+
+      //strcpy (mbuf,"Connection: close\n");
+      //mcli->Send(mbuf,strlen(mbuf));
+
+      strcpy (mbuf,"Content-Type: text/html\n\n");
+      mcli->Send(mbuf,strlen(mbuf));
+
+      strcpy (mbuf,"<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 3.2//EN\">\n");
+      mcli->Send(mbuf,strlen(mbuf));
+
+      strcpy (mbuf,"<HTML>\n");
+      mcli->Send(mbuf,strlen(mbuf));
+
+      mcli->Send("<head><title>icab status</title></head>",39);
+
+
+      
+      
+      resoitem *mp = mres.thelist;
+      int howmany =0;
+      while (mp) { howmany++; mp=mp->next;}
+      
+      strcpy (mbuf,"<frameset frameborder=\"no\" rows=\"*");
+      for (int ii=0;ii<howmany-1;ii++)
+       strcat (mbuf,",*");
+
+      strcat (mbuf,"\">\n");
+      mcli->Send(mbuf,strlen(mbuf));
+      
+      mp = mres.thelist;
+
+      while (mp)
+      {
+         strcpy(mbuf,"<frame scrolling=\"no\" src=\"http://");
+         strcat(mbuf,inet_ntoa(mp->resoAddr));
+         strcat(mbuf,":8080/status\">\n");
+         mcli->Send(mbuf,strlen(mbuf));
+         mp=mp->next;
+      }
+ 
+      strcpy(mbuf,"</frameset>\n<noframes></noframes>");
+      mcli->Send(mbuf,strlen(mbuf));
+      mcli->Send("\n\n",2);
+
+
+      strcpy (mbuf,"</html>\n");
+      mcli->Send(mbuf,strlen(mbuf));
+      
+      //mcli->Disconnect();
+       //while ( mcli->Receive(mbuf,1)>0)
+       // printf("%c",mbuf[0]);
+
+      sleep(2);
+      delete mcli;
+   }      
+
+}
+
+void *
+brows(void *marg)
+{
+  resolist *mres = (resolist *)marg;
+   Cudp brs(2244);
+   char mbuf[1518];
+
+   while(1)
+   {
+     if ( int recv = brs.Receive(mbuf,256)>0) 
+     {
+       // cout << "received " << endl;
+        in_addr rad;
+        memcpy(&rad.s_addr,&brs.clientAddr.sin_addr.s_addr,sizeof (rad.s_addr));
+        mres->Addresoitem(rad,brs.clientAddr.sin_addr.s_addr,*((long *)mbuf),&mbuf[8]);
+     }
+    else cout << "none " << recv<< endl;
+     mres->ttlupdate();
+//     mres->printlist();
+   }
+}
+
+
+      

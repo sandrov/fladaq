@@ -1,0 +1,38 @@
+
+LDFLAGS = -lpthread -L/usr/local/mysql-standard-5.0.27-osx10.4-powerpc/lib -lz
+CCFLAGS =  -I//usr/include/mysql -I/usr/local/mysql-standard-5.0.27-osx10.4-powerpc/include/
+CC = g++
+LD = g++
+
+.cc.o  :
+	@ $(RM) $@
+	$(CC) $(CCFLAGS) -g -c $<
+
+
+
+Ctcpux.o : Ctcpux.h
+
+mpicaobjs = mpica.o Cicaevm.o Cicadb.o Cicawrihdl.o Cicacrate.o Ctcpux.o \
+	    Cudpux.o Cicathr.o Cicatrg.o Cicaconfdb.o Cicalogdb.o Cicaevrecv.o Ckeycmd.o
+
+rbrowobjs = resbrowser.o Cresoitem.o Cudpux.o Ctcpux.o
+
+mpicawriobjs = mpicawri.o Cicadb.o Cicaevmhdl.o Cicawri.o Cicacrate.o \
+               Cicathr.o Cicaevrecv.o \
+               Cicarunf.o Cicadskfil.o Cicalogdb.o \
+               Cicaann.o Cicaactimon.o \
+               Ctcpux.o Cudpux.o Cicaconfdb.o
+testbroobjs = testrbrow.o Cresbrow.o Cresoitem.o Cudpux.o Ctcpux.o \
+               Cicathr.o Cicapertsk.o Cicadb.o Cicalogdb.o
+
+mpica : ${mpicaobjs} 
+	$(LD) $(LDFLAGS) -o $@ ${mpicaobjs} -lmysqlclient
+
+mpicawri : ${mpicawriobjs} 
+	$(LD) $(LDFLAGS) -o $@ ${mpicawriobjs} -lmysqlclient
+
+rbrow : ${rbrowobjs} 
+	$(LD) $(LDFLAGS) -o $@ ${rbrowobjs} 
+
+testbro: ${testbroobjs}
+	$(LD) $(LDFLAGS) -o $@ ${testbroobjs} -lmysqlclient -lz

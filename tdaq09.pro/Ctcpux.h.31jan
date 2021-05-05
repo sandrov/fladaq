@@ -1,0 +1,39 @@
+#ifndef _Ctcp_
+#define _Ctcp_
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/tcp.h>
+#include <netinet/in.h>
+#include <stdio.h>
+#include <netdb.h>
+
+class Ctcp
+{
+  protected:
+
+    int port;
+    int sock;
+
+    int connected;
+    struct sockaddr_in clientAddr;
+    struct sockaddr_in myaddr;
+
+
+  public:
+
+    Ctcp();
+    Ctcp(int port);
+    Ctcp(int sock,int opt);
+    ~Ctcp();
+
+    Ctcp * Accept();
+    void Connect(char *hostaddr,int port);
+    void Disconnect();
+   
+    int Send(char * buffer,int size); 
+    int Receive(char *buffer,int size);
+
+};
+
+#endif

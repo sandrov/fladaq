@@ -1,0 +1,139 @@
+#include "Ctcpux.h"
+#include <errno.h>
+
+Ctcp::Ctcp()
+{
+   Ctcp(0);
+}
+
+Ctcp::Ctcp(int localport)
+{
+//  struct sockaddr_in myaddr;
+ 
+    connected=false;
+
+    bzero ((char *) &myaddr, sizeof(myaddr));
+
+   sock = socket (AF_INET, SOCK_STREAM, 0);
+
+   if (sock < 0)
+      throw;
+
+    myaddr.sin_family       = AF_INET;
+    myaddr.sin_port         = htons (localport);
+ 
+    int blen = 65536;
+
+    if(setsockopt(sock,SOL_SOCKET,SO_SNDBUF,(char *)&blen,sizeof(blen))<0)
+      throw;
+    if(setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(char *)&blen,sizeof(blen))<0)
+      throw;
+    if(setsockopt(sock,SOL_SOCKET,TCP_NODELAY,(char *)&blen,sizeof(blen))<0)
+      throw;
+
+    port = localport;
+
+    if (port)
+        if(bind(sock,(struct sockaddr *)&myaddr,sizeof (myaddr)) < 0)
+        { perror ("bind failed");
+          throw;
+        }
+
+          
+}
+
+Ctcp::Ctcp(int snew, int opt)
+{
+
+   connected = true;
+   port =0;
+
+   sock = snew;
+}
+
+Ctcp::~Ctcp()
+{
+  close (sock);
+}
+
+Ctcp *
+Ctcp::Accept()
+{
+
+ //   struct sockaddr_in  clientAddr; /* client's address */    
+
+    bzero ((char *) &clientAddr, sizeof (clientAddr));
+
+    if (listen (sock, 2) < 0)
+        {
+        perror ("listen failed");
+        throw;
+        }
+
+    int len = sizeof (clientAddr);
+
+    int snew = accept (sock, (struct sockaddr *) &clientAddr, &len);
+    if (snew ==0) 
+    {
+        perror ("accept failed");
+       throw;
+    }
+ 
+    return new Ctcp(snew,0);
+}
+
+void 
+Ctcp::Connect(char *host,int toport)
+{
+    clientAddr.sin_family      = AF_INET;
+    clientAddr.sin_addr.s_addr = inet_addr (host);
+    clientAddr.sin_port        = htons (toport);
+  
+ if (connect (sock, (struct sockaddr  *)&clientAddr, sizeof (clientAddr)) < 0)
+{
+        perror ("connect failed");
+  throw;
+}
+  connected = true;
+}
+
+int
+Ctcp::Receive(char *buffer,int size)
+{
+//    return  read (sock, buffer,size) ;
+ 
+    int howmany = 0;
+    int toberead = size;
+    do
+    {
+      //int readnow = recv (sock, &buffer[howmany], toberead,MSG_WAITALL) ;
+      int readnow = recv (sock, &buffer[howmany], toberead,0) ;
+      if (readnow < 0 ) {printf("some rrorrs...%d\n",errno);}
+      else { howmany+=readnow; toberead-=readnow;}
+    } while (toberead>0);
+    return howmany;
+}
+
+int
+Ctcp::Receive(char *buffer,int size)
+{
+//    return  read (sock, buffer,size) ;
+ 
+    int howmany = 0;
+    int toberead = size;
+    do
+    {
+      //int readnow = recv (sock, &buffer[howmany], toberead,MSG_WAITALL) ;
+      int readnow = recv (sock, &buffer[howmany], toberead,0) ;
+      if (readnow < 0 ) {printf("some rrorrs...%d\n",errno);}
+      else { howmany+=readnow; toberead-=readnow;}
+    } while (toberead>0);
+    return howmany;
+
+}
+
+int
+Ctcp::Send(char *buffer,int size)
+{
+    return  write (sock, buffer, size) ;
+}
